@@ -12,12 +12,14 @@ Test cases:
 8. Multiple prefixes configuration
 """
 
+from typing import Optional
+
 import pytest
 from sqlfluff.core import Linter
 from sqlfluff.core.config import FluffConfig
 
 
-def create_config_file(target_model_prefixes: str | None = None) -> str:
+def create_config_file(target_model_prefixes: Optional[str] = None) -> str:
     """Create a temporary configuration file for testing"""
     config_content = """[sqlfluff]
 dialect = bigquery

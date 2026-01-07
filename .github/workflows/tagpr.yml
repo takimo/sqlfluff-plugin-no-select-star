@@ -1,0 +1,23 @@
+name: tagpr
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tagpr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: Songmu/tagpr@v1
+        with:
+          # バージョンファイルの場所を指定
+          version-file: pyproject.toml
+          # バージョンの正規表現パターン
+          version-regexp: '^version = "([^"]+)"'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
