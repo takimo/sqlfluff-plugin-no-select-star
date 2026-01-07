@@ -1,279 +1,11 @@
-# SQLFluff Plugin: No Select Star
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-
-A SQLFluff plugin to forbid wildcard projections (`SELECT *`) in SQL files.
-
-**[日本語版はこちら](#japanese-version) | [Japanese version](#japanese-version)**
-
----
-
-## Table of Contents
-
-- [Why This Plugin?](#why-this-plugin)
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Use Cases](#use-cases)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Why This Plugin?
-
-Using wildcard projections like `SELECT *` or `table.*` in SQL queries can cause several problems:
-
-### 1. **Unpredictable Schema Changes**
-When a source table's schema changes (columns added/removed), wildcard projections cause your query output to change automatically and silently. This can break downstream models or applications without warning.
-
-### 2. **Performance Degradation**
-Wildcards select all columns, including ones you don't need. This wastes:
-- Network bandwidth
-- Memory
-- Storage space
-- Compute resources (especially in columnar databases like BigQuery)
-
-### 3. **Reduced Maintainability**
-It's impossible to understand which columns are actually used just by reading the SQL. This makes:
-- Code reviews difficult
-- Debugging time-consuming
-- Impact analysis nearly impossible
-
-### 4. **Poor Documentation**
-Explicit column selection serves as implicit documentation of your data contracts and dependencies.
-
-**This plugin enforces explicit column enumeration to prevent these issues.**
-
----
-
-## Features
-
-- ✅ Detects `SELECT *` and `table.*` patterns
-- ✅ Allows `COUNT(*)` (correctly recognized as aggregate function)
-- ✅ Configurable file targeting with prefix filters
-- ✅ Perfect for dbt projects (staging, intermediate layers)
-- ✅ Fast performance using SQLFluff's SegmentSeekerCrawler
-- ✅ Comprehensive test coverage
-
----
-
-## Installation
-
-### From Source (Editable Install)
-
-```bash
-cd sqlfluff-plugin-no-select-star
-pip install -e .
-```
-
-### For Development (with test dependencies)
-
-```bash
-pip install -e ".[test]"
-```
-
----
-
-## Quick Start
-
-### 1. Create a `.sqlfluff` configuration file
-
-```ini
-[sqlfluff]
-dialect = bigquery
-rules = NoSelectStar_NS01
-```
-
-### 2. Run SQLFluff
-
-```bash
-sqlfluff lint models/
-```
-
-### 3. See errors for wildcard projections
-
-```
-== [models/staging/stg_users.sql] FAIL
-L:1 | P:1 | NS01 | Forbidden wildcard projection found in 'stg_users.sql': *
-```
-
----
-
-## Configuration
-
-### Basic Configuration
-
-Add the rule to your `.sqlfluff` file:
-
-```ini
-[sqlfluff]
-dialect = bigquery
-rules = NoSelectStar_NS01
-```
-
-### Target Specific File Prefixes
-
-Use `target_model_prefixes` to only check files with specific prefixes:
-
-```ini
-[sqlfluff]
-rules = NoSelectStar_NS01
-
-[sqlfluff:rules:NoSelectStar_NS01]
-# Only check staging models
-target_model_prefixes = stg_
-```
-
-### Multiple Prefixes
-
-Use comma-separated values:
-
-```ini
-[sqlfluff:rules:NoSelectStar_NS01]
-# Check staging and intermediate models
-target_model_prefixes = stg_, int_
-```
-
-### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `target_model_prefixes` | string | (empty) | Comma-separated filename prefixes. Only files starting with these prefixes will be checked. If empty, all files are checked. |
-
----
-
-## Use Cases
-
-### Use Case 1: dbt Staging Models (Recommended)
-
-In dbt projects, **staging models** (`stg_*`) are the first transformation layer from raw data sources. Explicit column selection here is crucial for:
-
-- **Schema evolution control**: Raw data schemas change frequently
-- **Early detection**: Catch schema changes at the earliest pipeline stage
-- **Data contracts**: Clear column selection acts as a contract
-- **Performance**: Only select columns actually needed downstream
-
-**Configuration:**
-
-```ini
-[sqlfluff:rules:NoSelectStar_NS01]
-target_model_prefixes = stg_
-```
-
-**Example:**
-
-❌ **Bad (Error):**
-```sql
--- models/staging/stg_users.sql
-SELECT * FROM {{ source('raw', 'users') }}
-```
-
-✅ **Good (Pass):**
-```sql
--- models/staging/stg_users.sql
-SELECT
-    user_id,
-    email,
-    created_at,
-    updated_at
-FROM {{ source('raw', 'users') }}
-```
-
-### Use Case 2: Staging + Intermediate Layers
-
-For stricter enforcement, check both staging and intermediate models:
-
-```ini
-[sqlfluff:rules:NoSelectStar_NS01]
-target_model_prefixes = stg_, int_
-```
-
-### Use Case 3: All Models (Strictest)
-
-For maximum SQL quality, check all models:
-
-```ini
-[sqlfluff]
-rules = NoSelectStar_NS01
-
-# No target_model_prefixes = all files are checked
-```
-
-### Use Case 4: Data Marts Only
-
-If you only want to enforce in business logic layers:
-
-```ini
-[sqlfluff:rules:NoSelectStar_NS01]
-target_model_prefixes = mart_, dim_, fact_
-```
-
-### Use Case 5: Custom Gate/Review Layer
-
-For models that require approval before deployment:
-
-```ini
-[sqlfluff:rules:NoSelectStar_NS01]
-target_model_prefixes = gate_, review_
-```
-
----
-
-## Testing
-
-### Run Tests
-
-```bash
-# Install test dependencies
-pip install -e ".[test]"
-
-# Run all tests
-pytest tests/ -v
-
-# Run specific test
-pytest tests/test_rule_no_select_star_ns01.py::TestRuleNoSelectStarNS01::test_prefix_match_returns_error -v
-```
-
-### Test Coverage
-
-The test suite covers:
-- ✅ Prefix matching and filtering
-- ✅ Multiple prefix configurations
-- ✅ Empty/null configuration handling
-- ✅ COUNT(*) allowance
-- ✅ Table-qualified wildcards (`t.*`)
-- ✅ Explicit column selection validation
-
----
-
-## Contributing
-
-Contributions are welcome! Please feel free to:
-
-1. Report bugs via [GitHub Issues](https://github.com/takimo/sqlfluff-plugin-no-select-star/issues)
-2. Submit pull requests
-3. Suggest new features or improvements
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-<a name="japanese-version"></a>
-
 # SQLFluff プラグイン: No Select Star
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
 SQL ファイル内のワイルドカード投影（`SELECT *`）を禁止する SQLFluff プラグインです。
+
+**[English documentation is available below](#english-version) | [英語版ドキュメントは下部にあります](#english-version)**
 
 ---
 
@@ -285,7 +17,11 @@ SQL ファイル内のワイルドカード投影（`SELECT *`）を禁止する
 - [クイックスタート](#クイックスタート)
 - [設定方法](#設定方法)
 - [使用例](#使用例)
+- [自動修正機能について](#自動修正機能について)
+- [トラブルシューティング](#トラブルシューティング)
 - [テスト](#テスト)
+- [将来の拡張機能](#将来の拡張機能)
+- [リリースプロセス](#リリースプロセス)
 - [コントリビューション](#コントリビューション)
 - [ライセンス](#ライセンス)
 
@@ -491,6 +227,56 @@ target_model_prefixes = gate_, review_
 
 ---
 
+## 自動修正機能について
+
+このプラグインは意図的に自動修正機能を提供していません。
+
+### 理由
+
+- **文脈依存の判断**: 正しく選択すべきカラムは、ビジネスロジックと下流の依存関係に依存します
+- **スキーマの理解が必要**: どのカラムが実際に必要かはユーザーのみが知っています  
+- **手動レビューの推奨**: カラムを明示的に選択することは、意識的に行うべき重要な設計判断です
+
+この手動アプローチが、より良いコード品質と理解につながると考えています。
+
+---
+
+## トラブルシューティング
+
+### プラグインがSQLFluffに認識されない
+
+`sqlfluff rules` で `NoSelectStar_NS01` ルールが表示されない場合：
+
+1. **インストールを確認**:
+   ```bash
+   pip list | grep sqlfluff-plugin-no-select-star
+   ```
+
+2. **プラグインを再インストール**（特に `pyproject.toml` を変更した場合）:
+   ```bash
+   pip uninstall sqlfluff-plugin-no-select-star
+   pip install -e .
+   ```
+
+3. **エントリーポイントの登録を確認**:
+   ```bash
+   python -c "from importlib.metadata import entry_points; print([ep for ep in entry_points().get('sqlfluff', [])])"
+   ```
+
+4. **SQLFluffがプラグインを認識できることを確認**:
+   ```bash
+   sqlfluff rules | grep NS01
+   ```
+   以下のように表示されるはずです: `NS01 | NoSelectStar_NS01 | Explicit column enumeration is required.`
+
+### ルールがファイルに適用されない
+
+- `.sqlfluff` 設定ファイルでルールが有効になっているか確認: `rules = NoSelectStar_NS01`
+- `target_model_prefixes` を使用している場合、ファイル名が設定されたプレフィックスに一致するか確認
+- 詳細モードで実行して SQLFluff の動作を確認: `sqlfluff lint -v models/`
+
+---
+
 ## テスト
 
 ### テストの実行
@@ -518,6 +304,36 @@ pytest tests/test_rule_no_select_star_ns01.py::TestRuleNoSelectStarNS01::test_pr
 
 ---
 
+## 将来の拡張機能
+
+将来のリリースで以下の機能を検討しています：
+
+- **除外パターン**: 特定のファイルやディレクトリをチェック対象から除外
+- **ホワイトリスト例外**: 特定のコンテキストで `SELECT *` を許可（例: `SELECT * FROM UNNEST(...)`）
+- **警告レベル**: エラー vs 警告の重要度を設定可能に
+- **カスタムエラーメッセージ**: プロジェクトごとにカスタマイズ可能なエラーメッセージ
+
+提案がある場合や、これらの機能に貢献したい場合は、Issue や Pull Request を開いてください！
+
+---
+
+## リリースプロセス
+
+このプロジェクトは [tagpr](https://github.com/Songmu/tagpr) を使用した自動バージョン管理を採用しています：
+
+1. PR を `main` ブランチにマージ
+2. tagpr が自動的に「リリース PR」を作成（バージョンと CHANGELOG を更新）
+3. リリース PR をレビュー・マージ
+4. tagpr が自動的に Git タグと GitHub Release を作成
+
+### メンテナー向け
+
+リリースをトリガーするには：
+- PR を `main` にマージするだけ
+- 残りは tagpr が自動的に処理します
+
+---
+
 ## コントリビューション
 
 コントリビューションを歓迎します！以下の方法でご参加ください：
@@ -531,6 +347,366 @@ pytest tests/test_rule_no_select_star_ns01.py::TestRuleNoSelectStarNS01::test_pr
 ## ライセンス
 
 このプロジェクトは MIT ライセンスの下でライセンスされています。詳細は [LICENSE](LICENSE) ファイルをご覧ください。
+
+---
+
+## Author
+
+**Shinya Takimoto**
+
+- GitHub: [@takimo](https://github.com/takimo)
+
+---
+
+<a name="english-version"></a>
+
+# SQLFluff Plugin: No Select Star
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+A SQLFluff plugin to forbid wildcard projections (`SELECT *`) in SQL files.
+
+---
+
+## Table of Contents
+
+- [Why This Plugin?](#why-this-plugin)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Use Cases](#use-cases)
+- [Why No Auto-fix?](#why-no-auto-fix)
+- [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
+- [Future Enhancements](#future-enhancements)
+- [Release Process](#release-process)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
+## Why This Plugin?
+
+Using wildcard projections like `SELECT *` or `table.*` in SQL queries can cause several problems:
+
+### 1. **Unpredictable Schema Changes**
+When a source table's schema changes (columns added/removed), wildcard projections cause your query output to change automatically and silently. This can break downstream models or applications without warning.
+
+### 2. **Performance Degradation**
+Wildcards select all columns, including ones you don't need. This wastes:
+- Network bandwidth
+- Memory
+- Storage space
+- Compute resources (especially in columnar databases like BigQuery)
+
+### 3. **Reduced Maintainability**
+It's impossible to understand which columns are actually used just by reading the SQL. This makes:
+- Code reviews difficult
+- Debugging time-consuming
+- Impact analysis nearly impossible
+
+### 4. **Poor Documentation**
+Explicit column selection serves as implicit documentation of your data contracts and dependencies.
+
+**This plugin enforces explicit column enumeration to prevent these issues.**
+
+---
+
+## Features
+
+- ✅ Detects `SELECT *` and `table.*` patterns
+- ✅ Allows `COUNT(*)` (correctly recognized as aggregate function)
+- ✅ Configurable file targeting with prefix filters
+- ✅ Perfect for dbt projects (staging, intermediate layers)
+- ✅ Fast performance using SQLFluff's SegmentSeekerCrawler
+- ✅ Comprehensive test coverage
+
+---
+
+## Installation
+
+### From Source (Editable Install)
+
+```bash
+cd sqlfluff-plugin-no-select-star
+pip install -e .
+```
+
+### For Development (with test dependencies)
+
+```bash
+pip install -e ".[test]"
+```
+
+---
+
+## Quick Start
+
+### 1. Create a `.sqlfluff` configuration file
+
+```ini
+[sqlfluff]
+dialect = bigquery
+rules = NoSelectStar_NS01
+```
+
+### 2. Run SQLFluff
+
+```bash
+sqlfluff lint models/
+```
+
+### 3. See errors for wildcard projections
+
+```
+== [models/staging/stg_users.sql] FAIL
+L:1 | P:1 | NS01 | Forbidden wildcard projection found in 'stg_users.sql': *
+```
+
+---
+
+## Configuration
+
+### Basic Configuration
+
+Add the rule to your `.sqlfluff` file:
+
+```ini
+[sqlfluff]
+dialect = bigquery
+rules = NoSelectStar_NS01
+```
+
+### Target Specific File Prefixes
+
+Use `target_model_prefixes` to only check files with specific prefixes:
+
+```ini
+[sqlfluff]
+rules = NoSelectStar_NS01
+
+[sqlfluff:rules:NoSelectStar_NS01]
+# Only check staging models
+target_model_prefixes = stg_
+```
+
+### Multiple Prefixes
+
+Use comma-separated values:
+
+```ini
+[sqlfluff:rules:NoSelectStar_NS01]
+# Check staging and intermediate models
+target_model_prefixes = stg_, int_
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `target_model_prefixes` | string | (empty) | Comma-separated filename prefixes. Only files starting with these prefixes will be checked. If empty, all files are checked. |
+
+---
+
+## Use Cases
+
+### Use Case 1: dbt Staging Models (Recommended)
+
+In dbt projects, **staging models** (`stg_*`) are the first transformation layer from raw data sources. Explicit column selection here is crucial for:
+
+- **Schema evolution control**: Raw data schemas change frequently
+- **Early detection**: Catch schema changes at the earliest pipeline stage
+- **Data contracts**: Clear column selection acts as a contract
+- **Performance**: Only select columns actually needed downstream
+
+**Configuration:**
+
+```ini
+[sqlfluff:rules:NoSelectStar_NS01]
+target_model_prefixes = stg_
+```
+
+**Example:**
+
+❌ **Bad (Error):**
+```sql
+-- models/staging/stg_users.sql
+SELECT * FROM {{ source('raw', 'users') }}
+```
+
+✅ **Good (Pass):**
+```sql
+-- models/staging/stg_users.sql
+SELECT
+    user_id,
+    email,
+    created_at,
+    updated_at
+FROM {{ source('raw', 'users') }}
+```
+
+### Use Case 2: Staging + Intermediate Layers
+
+For stricter enforcement, check both staging and intermediate models:
+
+```ini
+[sqlfluff:rules:NoSelectStar_NS01]
+target_model_prefixes = stg_, int_
+```
+
+### Use Case 3: All Models (Strictest)
+
+For maximum SQL quality, check all models:
+
+```ini
+[sqlfluff]
+rules = NoSelectStar_NS01
+
+# No target_model_prefixes = all files are checked
+```
+
+### Use Case 4: Data Marts Only
+
+If you only want to enforce in business logic layers:
+
+```ini
+[sqlfluff:rules:NoSelectStar_NS01]
+target_model_prefixes = mart_, dim_, fact_
+```
+
+### Use Case 5: Custom Gate/Review Layer
+
+For models that require approval before deployment:
+
+```ini
+[sqlfluff:rules:NoSelectStar_NS01]
+target_model_prefixes = gate_, review_
+```
+
+---
+
+## Why No Auto-fix?
+
+This plugin intentionally does not provide automatic fixes.
+
+### Reasons
+
+- **Context-dependent decisions**: The correct columns to select depend on your specific business logic and downstream dependencies
+- **Schema awareness required**: Only you know which columns are actually needed for your use case
+- **Manual review encouraged**: Explicitly choosing columns is an important design decision that should be made consciously
+
+We believe this manual approach leads to better code quality and understanding.
+
+---
+
+## Troubleshooting
+
+### Plugin not detected by SQLFluff
+
+If `sqlfluff rules` doesn't show the `NoSelectStar_NS01` rule:
+
+1. **Verify installation**:
+   ```bash
+   pip list | grep sqlfluff-plugin-no-select-star
+   ```
+
+2. **Reinstall the plugin** (especially if you modified `pyproject.toml`):
+   ```bash
+   pip uninstall sqlfluff-plugin-no-select-star
+   pip install -e .
+   ```
+
+3. **Check entry point registration**:
+   ```bash
+   python -c "from importlib.metadata import entry_points; print([ep for ep in entry_points().get('sqlfluff', [])])"
+   ```
+
+4. **Verify SQLFluff can find the plugin**:
+   ```bash
+   sqlfluff rules | grep NS01
+   ```
+   You should see: `NS01 | NoSelectStar_NS01 | Explicit column enumeration is required.`
+
+### Rule not triggering on my files
+
+- Check your `.sqlfluff` configuration file has the rule enabled: `rules = NoSelectStar_NS01`
+- If using `target_model_prefixes`, verify your filename matches the configured prefixes
+- Run with verbose mode to see what SQLFluff is doing: `sqlfluff lint -v models/`
+
+---
+
+## Testing
+
+### Run Tests
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run all tests
+pytest tests/ -v
+
+# Run specific test
+pytest tests/test_rule_no_select_star_ns01.py::TestRuleNoSelectStarNS01::test_prefix_match_returns_error -v
+```
+
+### Test Coverage
+
+The test suite covers:
+- ✅ Prefix matching and filtering
+- ✅ Multiple prefix configurations
+- ✅ Empty/null configuration handling
+- ✅ COUNT(*) allowance
+- ✅ Table-qualified wildcards (`t.*`)
+- ✅ Explicit column selection validation
+
+---
+
+## Future Enhancements
+
+We're considering the following features for future releases:
+
+- **Exclusion patterns**: Ability to exclude specific files or directories from checking
+- **Whitelist exceptions**: Allow `SELECT *` in specific contexts (e.g., `SELECT * FROM UNNEST(...)`)
+- **Warning levels**: Configurable error vs warning severity
+- **Custom error messages**: Per-project customizable error messages
+
+If you have suggestions or would like to contribute these features, please open an issue or pull request!
+
+---
+
+## Release Process
+
+This project uses [tagpr](https://github.com/Songmu/tagpr) for automated version management:
+
+1. Merge your PR to `main` branch
+2. tagpr automatically creates a "Release PR" with updated version and CHANGELOG
+3. Review and merge the Release PR
+4. tagpr automatically creates a Git tag and GitHub Release
+
+### For Maintainers
+
+To trigger a release:
+- Just merge PRs to `main`
+- tagpr handles the rest automatically
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to:
+
+1. Report bugs via [GitHub Issues](https://github.com/takimo/sqlfluff-plugin-no-select-star/issues)
+2. Submit pull requests
+3. Suggest new features or improvements
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
